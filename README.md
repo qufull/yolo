@@ -79,9 +79,9 @@ project/
 ## 1. Клонирование репозитория
 
 ```bash
-git clone https://github.com/your-username/video-analytics-yolo.git
+git clone https://github.com/qufull/yolo.git
 
-cd video-analytics-yolo
+cd yolo
 ```
 
 ---
@@ -197,8 +197,3 @@ dist/
 
 Минович Олег Витальевич
 
----
-
-# Лицензия
-
-MIT License
