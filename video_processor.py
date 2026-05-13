@@ -13,30 +13,28 @@ class VideoProcessor(QThread):
     update_count_signal = pyqtSignal(int)
     finished_signal = pyqtSignal()
 
-    def __init__(self, video_path, polygon_points):
+    def __init__(self, video_path, polygon_points, skip_frames=3):
         super().__init__()
         self.video_path = video_path
         self.polygon_points = polygon_points
+        self.skip_frames = skip_frames
         self.running = True
 
-        # --- СОЗДАЕМ КАСТОМНЫЙ МОЗГ ДЛЯ ТРЕКЕРА ---
-        # Мы программно создаем файл настроек с "длинной памятью"
         self.custom_tracker_path = "custom_botsort.yaml"
         self.create_custom_tracker_config()
 
     def create_custom_tracker_config(self):
-        """Создает файл настроек трекера с агрессивной памятью против перекрытий"""
         config = {
             'tracker_type': 'botsort',
-            'track_high_thresh': 0.3,  # Порог уверенности для захвата человека
-            'track_low_thresh': 0.1,  # Порог для удержания "спрятавшегося" человека
-            'new_track_thresh': 0.6,  # Делаем ВЫШЕ: трекеру будет сложнее выдать новый ID!
-            'track_buffer': 150,  # САМОЕ ВАЖНОЕ: Память 150 кадров (около 5 секунд) вместо 30!
-            'match_thresh': 0.9,  # Позволяем связывать рамки, даже если они немного изменились
+            'track_high_thresh': 0.3,
+            'track_low_thresh': 0.1,
+            'new_track_thresh': 0.6,
+            'track_buffer': 150,
+            'match_thresh': 0.9,
             'gmc_method': 'sparseOptFlow',
             'proximity_thresh': 0.5,
             'appearance_thresh': 0.25,
-            'with_reid': True,  # Оставляем классический BoT-SORT без тяжелой доп. модели
+            'with_reid': True,
             'fuse_score': True,
             'model': 'yolo26n-cls.pt'
         }
@@ -44,7 +42,7 @@ class VideoProcessor(QThread):
             yaml.dump(config, f)
 
     def run(self):
-        model = YOLO("yolo26n.pt")
+        model = YOLO("yolov8n.pt")
 
         box_annotator = sv.BoxAnnotator(thickness=2)
         label_annotator = sv.LabelAnnotator(text_thickness=2, text_scale=0.5)
@@ -62,20 +60,30 @@ class VideoProcessor(QThread):
 
         unique_people_in_zone = set()
 
+        # ДОБАВЛЕНО: счетчик кадров
+        frame_counter = 0
+
         while self.running and cap.isOpened():
             ret, frame = cap.read()
             if not ret:
                 break
 
+            frame_counter += 1
+
+            # ДОБАВЛЕНО: Пропускаем кадры.
+            # Если остаток от деления счетчика на skip_frames не равен нулю,
+            # мы просто переходим к следующему кадру без обработки нейросетью.
+            if frame_counter % self.skip_frames != 0:
+                continue
+
             frame = cv2.resize(frame, (1280, 720))
 
-            # Подключаем наш кастомный файл с длинной памятью
             results = model.track(
                 frame,
                 classes=[0],
                 conf=0.35,
                 imgsz=1280,
-                tracker=self.custom_tracker_path,  # ИСПОЛЬЗУЕМ СВОЙ КОНФИГ
+                tracker=self.custom_tracker_path,
                 persist=True,
                 verbose=False
             )[0]
@@ -132,7 +140,6 @@ class VideoProcessor(QThread):
 
         cap.release()
 
-        # Удаляем временный конфиг за собой
         if os.path.exists(self.custom_tracker_path):
             os.remove(self.custom_tracker_path)
 
