@@ -42,7 +42,7 @@ class VideoProcessor(QThread):
             yaml.dump(config, f)
 
     def run(self):
-        model = YOLO("yolov8n.pt")
+        model = YOLO("yolo26n.pt")
 
         box_annotator = sv.BoxAnnotator(thickness=2)
         label_annotator = sv.LabelAnnotator(text_thickness=2, text_scale=0.5)
@@ -79,7 +79,7 @@ class VideoProcessor(QThread):
             frame = cv2.resize(frame, (1280, 720))
 
             results = model.track(
-                frame,
+                source=frame,
                 classes=[0],
                 conf=0.35,
                 imgsz=1280,
@@ -108,12 +108,15 @@ class VideoProcessor(QThread):
 
             labels = []
             current_people_in_zone = 0
-            if detections_in_zone.tracker_id is not None:
-                current_people_in_zone = len(detections_in_zone.tracker_id)
 
-                for tracker_id in detections_in_zone.tracker_id:
-                    unique_people_in_zone.add(tracker_id)
-                    labels.append(f"#{tracker_id}")
+            if len(detections_in_zone) > 0:
+                if detections_in_zone.tracker_id is not None:
+                    current_people_in_zone = len(detections_in_zone.tracker_id)
+                    for tracker_id in detections_in_zone.tracker_id:
+                        unique_people_in_zone.add(tracker_id)
+                        labels.append(f"#{tracker_id}")
+                else:
+                    labels = ["Ожидание..." for _ in range(len(detections_in_zone))]
 
             annotated_frame = box_annotator.annotate(scene=frame.copy(), detections=detections_in_zone)
             annotated_frame = label_annotator.annotate(scene=annotated_frame, detections=detections_in_zone,
